@@ -50,7 +50,8 @@ struct EditorView: View {
     @State private var share: SharePayload?
     @State private var controller = PDFViewControllerBridge()
     @State private var showDiscard = false
-    @State private var saveFailureOnClose = false
+    @State private var closingError = ""
+    @State private var metadataPending = false
 
     var body: some View {
         NavigationStack {
@@ -104,7 +105,7 @@ struct EditorView: View {
                 Button(L("editor.retrySave")) { close() }
                 Button(L("editor.discard"), role: .destructive) { dismiss() }
                 Button(L("cancel"), role: .cancel) {}
-            } message: { Text(L("editor.unsavedHint")) }
+            } message: { Text(closingError + "\n\n" + L("editor.unsavedHint")) }
             .onChange(of: session.revision) { _, _ in pageIndex = min(pageIndex, max(0, session.document.pageCount - 1)) }
             .task(id: session.revision) {
                 guard session.isDirty else { return }
@@ -217,14 +218,19 @@ struct EditorView: View {
     private func save() throws {
         let wasDirty = session.isDirty
         try session.save()
-        if wasDirty { try library.didSave(record, pageCount: session.document.pageCount) }
+        if wasDirty { metadataPending = true }
+        if metadataPending {
+            try library.didSave(record, pageCount: session.document.pageCount)
+            metadataPending = false
+        }
     }
 
     private func close() {
         do { try save(); dismiss() }
-        catch { error = Message(error); saveFailureOnClose = true }
-        // The recovery dialog is shown only after the error alert is dismissed.
-        if saveFailureOnClose { showDiscard = true; saveFailureOnClose = false; error = nil }
+        catch {
+            if session.isDirty { closingError = error.localizedDescription; showDiscard = true }
+            else { self.error = Message(error) }
+        }
     }
 
     private func export() {

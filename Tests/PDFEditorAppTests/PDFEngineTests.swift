@@ -95,6 +95,34 @@ final class PDFEngineTests: XCTestCase {
         XCTAssertGreaterThan(summary.textDrawingCommands, 0)
     }
 
+    func testMarkupAndAnnotationDeletionAreUndoable() throws {
+        let session = try makeSession()
+        let page = try session.page(at: 0)
+        let selection = try XCTUnwrap(page.selection(for: NSRange(location: 0, length: 5)))
+        try session.addMarkup(selection: selection, kind: .highlight, color: .yellow)
+        let annotation = try XCTUnwrap(page.annotations.first(where: { $0.type == "Highlight" }))
+        try session.removeAnnotation(annotation)
+        XCTAssertTrue(page.annotations.isEmpty)
+        try session.undo()
+        let reopened = try XCTUnwrap(PDFDocument(data: session.serialized()))
+        XCTAssertTrue(reopened.page(at: 0)?.annotations.contains { $0.type == "Highlight" } == true)
+    }
+
+    func testFailedExportDoesNotReplaceWorkingFile() throws {
+        let session = try makeSession()
+        let before = try Data(contentsOf: session.sourceURL)
+        try session.rotatePage(at: 0)
+        XCTAssertThrowsError(try session.export(to: session.sourceURL.deletingLastPathComponent()))
+        XCTAssertEqual(try Data(contentsOf: session.sourceURL), before)
+        XCTAssertTrue(session.isDirty)
+    }
+
+    func testOnDeviceOCRRecognizesRenderedPage() async throws {
+        let session = try makeSession()
+        let text = try await OCRService.recognize(page: session.page(at: 0))
+        XCTAssertTrue(text.localizedCaseInsensitiveContains("First page"), text)
+    }
+
     func testInvalidImportDoesNotCreateLibraryRecord() throws {
         let session = try makeSession()
         let library = LibraryStore(root: session.sourceURL.deletingLastPathComponent().appendingPathComponent("Library"))

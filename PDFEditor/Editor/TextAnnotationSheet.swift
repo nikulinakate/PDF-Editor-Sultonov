@@ -17,7 +17,7 @@ struct TextAnnotationSheet: View {
         self.placement = placement; self.onSave = onSave
         _text = State(initialValue: placement.annotation?.contents ?? "")
         _fontSize = State(initialValue: Double(placement.annotation?.font?.pointSize ?? 18))
-        _color = State(initialValue: placement.annotation?.fontColor.map { Color(uiColor: $0) } ?? color)
+        _color = State(initialValue: (placement.annotation?.fontColor).map { Color(uiColor: $0) } ?? color)
         _x = State(initialValue: placement.bounds.minX); _y = State(initialValue: placement.bounds.minY)
         _width = State(initialValue: placement.bounds.width); _height = State(initialValue: placement.bounds.height)
     }

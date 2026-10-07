@@ -31,8 +31,8 @@ struct PDFCanvas: UIViewRepresentable {
         bridge.view = pdf
         context.coordinator.observer = NotificationCenter.default.addObserver(forName: .PDFViewPageChanged, object: pdf, queue: .main) { [weak coordinator = context.coordinator] _ in
             MainActor.assumeIsolated {
-                guard let coordinator, let page = coordinator.container?.pdf.currentPage,
-                      let document = coordinator.parent.session.document as PDFDocument? else { return }
+                guard let coordinator, let page = coordinator.container?.pdf.currentPage else { return }
+                let document = coordinator.parent.session.document
                 let index = document.index(for: page)
                 if index != NSNotFound { coordinator.parent.onPageChanged(index) }
             }

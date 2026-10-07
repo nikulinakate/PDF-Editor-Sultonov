@@ -17,8 +17,10 @@ public enum PDFStreamInspector {
     public static func inspect(page: PDFPage) throws -> PDFStreamSummary {
         guard let document = page.document, !document.isLocked, document.allowsCopying,
               let reference = page.pageRef,
-              let stream = CGPDFContentStreamCreateWithPage(reference),
               let table = CGPDFOperatorTableCreate() else { throw PDFEditorError.permissionDenied }
+        defer { CGPDFOperatorTableRelease(table) }
+        let stream = CGPDFContentStreamCreateWithPage(reference)
+        defer { CGPDFContentStreamRelease(stream) }
         let counter = StreamCounter()
         let pointer = Unmanaged.passUnretained(counter).toOpaque()
         CGPDFOperatorTableSetCallback(table, "Tj", countTextCommand)
@@ -26,9 +28,9 @@ public enum PDFStreamInspector {
         CGPDFOperatorTableSetCallback(table, "'", countTextCommand)
         CGPDFOperatorTableSetCallback(table, "\"", countTextCommand)
         CGPDFOperatorTableSetCallback(table, "Do", countExternalObjectCommand)
-        guard let scanner = CGPDFScannerCreate(stream, table, pointer), CGPDFScannerScan(scanner) else {
-            throw PDFEditorError.invalidDocument
-        }
+        let scanner = CGPDFScannerCreate(stream, table, pointer)
+        defer { CGPDFScannerRelease(scanner) }
+        guard CGPDFScannerScan(scanner) else { throw PDFEditorError.invalidDocument }
         return PDFStreamSummary(textDrawingCommands: counter.text, externalObjectDrawingCommands: counter.externalObjects)
     }
 }
