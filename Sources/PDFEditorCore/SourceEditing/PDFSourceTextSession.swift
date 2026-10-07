@@ -16,27 +16,49 @@ extension PDFEditingSession {
         let raw = try editor.textBlocks(onPage: index), page = try page(at: index)
         var pending = Set(raw.map(\.id)), blocks: [SourceTextBlock] = []
         func normalized(_ text: String) -> String { String(text.filter { !$0.isWhitespace }) }
-        for block in raw where pending.contains(block.id) {
-            let point = CGPoint(x: block.baselineX + 1, y: block.baselineY + block.fontSize * 0.3)
-            if let line = page.selectionForLine(at: point), let lineText = line.string {
-                let bounds = line.bounds(for: page).insetBy(dx: -2, dy: -2)
-                let members = raw.filter {
-                    pending.contains($0.id) && abs($0.baselineY - block.baselineY) <= 0.5 &&
-                    bounds.contains(CGPoint(x: $0.baselineX + 1, y: $0.baselineY + $0.fontSize * 0.3))
-                }.sorted { $0.baselineX < $1.baselineX }
-                if members.count > 1, normalized(members.map(\.text).joined()) == normalized(lineText) {
-                    blocks.append(try editor.combining(members, text: lineText.trimmingCharacters(in: .newlines)))
-                    for member in members { pending.remove(member.id) }
-                    continue
-                }
+        for block in raw.sorted(by: { $0.baselineX < $1.baselineX }) where pending.contains(block.id) {
+            var members = [block]
+            var union = try sourceTextBounds(block)
+            for other in raw.sorted(by: { $0.baselineX < $1.baselineX }) where pending.contains(other.id) && other.id != block.id {
+                guard abs(other.baselineY - block.baselineY) <= 0.5,
+                      abs(other.fontSize - block.fontSize) <= 0.5,
+                      other.baselineX >= block.baselineX,
+                      other.baselineX <= union.maxX + max(6, block.fontSize * 0.5) else { continue }
+                let nextBounds = try sourceTextBounds(other)
+                // Do not join superimposed objects or separate table columns.
+                guard nextBounds.minX >= union.maxX - max(6, block.fontSize * 0.5) else { continue }
+                members.append(other); union = union.union(nextBounds)
             }
-            blocks.append(block); pending.remove(block.id)
+            if members.count > 1, let displayed = page.selection(for: union)?.string,
+               normalized(members.map(\.text).joined()) == normalized(displayed) {
+                let text = displayed.split(whereSeparator: { $0.isNewline }).joined(separator: " ")
+                blocks.append(try editor.combining(members, text: text))
+                for member in members { pending.remove(member.id) }
+            } else { blocks.append(block); pending.remove(block.id) }
         }
         sourceEditorSnapshot?.blocks[index] = blocks
         return blocks
     }
 
     public func sourceTextBounds(_ block: SourceTextBlock) throws -> CGRect {
+        let page = try page(at: block.pageIndex)
+        let sought = block.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let text = page.string, !sought.isEmpty {
+            let string = text as NSString
+            var remaining = NSRange(location: 0, length: string.length)
+            var attempts = 0
+            while remaining.length > 0 && attempts < 2_000 {
+                let range = string.range(of: sought, options: [], range: remaining)
+                if range.location == NSNotFound { break }
+                if let bounds = page.selection(for: range)?.bounds(for: page),
+                   abs(bounds.minX - block.baselineX) <= max(4, block.fontSize * 0.25),
+                   bounds.insetBy(dx: -3, dy: -3).contains(CGPoint(x: block.baselineX + 1, y: block.baselineY + block.fontSize * 0.3)) {
+                    return bounds.insetBy(dx: -2, dy: -2)
+                }
+                let next = NSMaxRange(range)
+                remaining = NSRange(location: next, length: string.length - next); attempts += 1
+            }
+        }
         let font = Self.replacementFont(for: block)
         let width = CTLineGetTypographicBounds(CTLineCreateWithAttributedString(Self.sourceAttributedText(block.text, font: font, color: .black, block: block)), nil, nil, nil)
         return CGRect(x: block.baselineX - 3, y: block.baselineY + Double(font.descender) - 3,
@@ -79,7 +101,7 @@ extension PDFEditingSession {
             throw PDFEditorError.sourceTextOverflow
         }
         // Reject overlap with another editable source object; no silent reflow.
-        for other in try sourceTextBlocks(onPage: block.pageIndex) where other.id != block.id {
+        for other in try sourceTextBlocks(onPage: block.pageIndex) where !other.operands.allSatisfy({ block.operands.contains($0) }) {
             if !text.isEmpty {
                 if glyphBounds.intersects(try sourceTextBounds(other)) { throw PDFEditorError.sourceTextOverflow }
             }

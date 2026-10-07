@@ -113,6 +113,15 @@ final class SourceTextTests: XCTestCase {
         XCTAssertEqual(next.baselineY, 700)
     }
 
+    func testLeadingTJAdjustmentDeterminesActualGlyphOrigin() throws {
+        let editor = try NativeContentEditor(data: fixture("BT /F1 20 Tf 30 700 Td [-6000 (Moved)] TJ ET"))
+        let block = try XCTUnwrap(editor.textBlocks(onPage: 0).first)
+        XCTAssertEqual(block.baselineX, 150)
+        XCTAssertEqual(block.baselineY, 700)
+        let result = try editor.replacing(block, withTextPDF: fixture("BT /F1 20 Tf 0 0 Td (New) Tj ET"))
+        XCTAssertEqual(try NativeContentEditor(data: result).textBlocks(onPage: 0).first?.baselineX, 150)
+    }
+
     private func fixture(_ text: String, shared: Bool = false) -> Data {
         let stream = "0 0 10 10 re f\n" + text
         var objects = [

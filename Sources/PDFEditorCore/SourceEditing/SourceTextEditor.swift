@@ -140,18 +140,26 @@ public final class NativeContentEditor {
                       let decoder = try? PDFFontDecoder(document: document, value: fontValue) else {
                     supported = false; operands.removeAll(); continue
                 }
-                if let first = anchor {
-                    if abs(blockSpacing-spacing*effective.a) > 0.01 || abs(blockWordSpacing-wordSpacing*effective.a) > 0.01 || abs(first.y-effective.y) > 0.01 || blockFont.split(separator: "+").last != decoder.name.split(separator: "+").last || abs(blockSize-size*effective.a) > 0.01 { supported = false }
-                } else { anchor = effective; blockFont = decoder.name; blockSize = size*effective.a; blockSpacing = spacing*effective.a; blockWordSpacing = wordSpacing*effective.a }
                 let strings: [Data]
                 if let string = values[0].string { strings = [string] }
                 else if let array = values[0].array, array.allSatisfy({ $0.string != nil || $0.number != nil }) { strings = array.compactMap(\.string) }
                 else { supported = false; operands.removeAll(); continue }
+                var leading = 0.0
+                if let array = values[0].array {
+                    for value in array {
+                        if let string = value.string, !string.isEmpty { break }
+                        if let number = value.number { leading -= number / 1_000 * size }
+                    }
+                }
+                let origin = effective.concatenating(PDFMatrix(x: leading))
+                if let first = anchor {
+                    if abs(blockSpacing-spacing*origin.a) > 0.01 || abs(blockWordSpacing-wordSpacing*origin.a) > 0.01 || abs(first.y-origin.y) > 0.01 || blockFont.split(separator: "+").last != decoder.name.split(separator: "+").last || abs(blockSize-size*origin.a) > 0.01 { supported = false }
+                } else { anchor = origin; blockFont = decoder.name; blockSize = size*origin.a; blockSpacing = spacing*origin.a; blockWordSpacing = wordSpacing*origin.a }
                 do { for string in strings { text += try decoder.decode(string) }; ranges.append(operands[0].1) }
                 catch { supported = false }
             case "ET":
                 guard active else { throw PDFEditorError.invalidDocument }; active = false
-                if supported, let anchor, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                if supported, let anchor, anchor.x.isFinite, anchor.y.isFinite, abs(anchor.x) < 1e8, abs(anchor.y) < 1e8, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                    text.count <= 2_000, (3...200).contains(blockSize) {
                     blocks.append(SourceTextBlock(id: UUID(), pageIndex: index, text: text, fontName: blockFont,
                                                   fontSize: blockSize, baselineX: anchor.x, baselineY: anchor.y, letterSpacing: blockSpacing, wordSpacing: blockWordSpacing,

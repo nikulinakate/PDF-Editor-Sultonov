@@ -2,6 +2,7 @@ import XCTest
 import PDFKit
 import PDFEditorCore
 import UIKit
+import CoreText
 @testable import PDFEditor
 
 @MainActor
@@ -169,7 +170,7 @@ final class PDFEngineTests: XCTestCase {
         XCTAssertThrowsError(try session.replaceSourceText(block, with: "stale", fontSize: 20, color: .black))
         let fresh = try XCTUnwrap(session.sourceTextBlocks(onPage: 0).first)
         let otherBefore = session.document.page(at: 1)?.string
-        try session.replaceSourceText(fresh, with: "Новый текст PDF", fontSize: 20, color: .blue)
+        try replaceCheckingGeometry(fresh, text: "Новый текст PDF", session: session, color: .blue)
         let edited = try XCTUnwrap(session.document.page(at: 0)?.string)
         XCTAssertFalse(edited.contains("First page"), edited)
         XCTAssertFalse(edited.contains("Первый"), edited)
@@ -216,7 +217,7 @@ final class PDFEngineTests: XCTestCase {
         let before = try renderedPixels(session.page(at: 0))
         let imageBefore = try renderedPixels(session.page(at: 2))
         let block = try XCTUnwrap(session.sourceTextBlocks(onPage: 0).first)
-        try session.replaceSourceText(block, with: "Visible replacement", fontSize: 20, color: .black)
+        try replaceCheckingGeometry(block, text: "Visible replacement", session: session, color: .black)
         let after = try renderedPixels(session.page(at: 0))
         XCTAssertNotEqual(before, after, "Replacement must affect rendered pixels")
         // Bitmap rows below the header are unaffected, including the field appearance.
@@ -237,6 +238,23 @@ final class PDFEngineTests: XCTestCase {
             page.draw(with: .mediaBox, to: context)
         }
         return pixels
+    }
+
+    private func replaceCheckingGeometry(_ block: SourceTextBlock, text: String, session: PDFEditingSession, color: UIColor) throws {
+        do {
+            try session.replaceSourceText(block, with: text, fontSize: 20, color: color)
+        } catch {
+            // Owned fixture diagnostics for source-geometry regressions, never user documents.
+            let font = PDFEditingSession.replacementFont(for: block).withSize(20)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
+                .font: font, .foregroundColor: color, .kern: block.letterSpacing
+            ]))
+            print("REPLACEMENT_GEOMETRY origin=(\(block.baselineX),\(block.baselineY)) size=\(block.fontSize) crop=\(try session.page(at: 0).bounds(for: .cropBox)) glyphs=\(CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds]))")
+            for other in try session.sourceTextBlocks(onPage: 0) {
+                print("SOURCE_GEOMETRY id=\(other.id) text=\(other.text) origin=(\(other.baselineX),\(other.baselineY)) bounds=\(try session.sourceTextBounds(other)) selected=\(other.id == block.id)")
+            }
+            throw error
+        }
     }
 
     private func makeSession() throws -> PDFEditingSession {
