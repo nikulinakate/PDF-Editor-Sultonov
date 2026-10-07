@@ -38,7 +38,7 @@ extension PDFEditingSession {
 
     public func sourceTextBounds(_ block: SourceTextBlock) throws -> CGRect {
         let font = Self.replacementFont(for: block)
-        let width = (block.text as NSString).size(withAttributes: [.font: font]).width
+        let width = CTLineGetTypographicBounds(CTLineCreateWithAttributedString(Self.sourceAttributedText(block.text, font: font, color: .black, block: block)), nil, nil, nil)
         return CGRect(x: block.baselineX - 3, y: block.baselineY + Double(font.descender) - 3,
                       width: Double(width) + 6, height: Double(font.lineHeight) + 6)
     }
@@ -48,6 +48,21 @@ extension PDFEditingSession {
         return UIFont(name: name, size: block.fontSize) ?? UIFont.systemFont(ofSize: block.fontSize)
     }
 
+    private static func sourceAttributedText(_ text: String, font: UIFont, color: UIColor, block: SourceTextBlock) -> NSAttributedString {
+        var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let scale = Double(font.pointSize) / block.fontSize
+        let tracking = block.letterSpacing * scale
+        if abs(tracking) > 0.0001 { attributes[.kern] = tracking }
+        let result = NSMutableAttributedString(string: text, attributes: attributes)
+        if abs(block.wordSpacing) > 0.0001 {
+            let utf16 = Array(text.utf16)
+            for (index, character) in utf16.enumerated() where character == 32 {
+                result.addAttribute(.kern, value: tracking + block.wordSpacing * scale, range: NSRange(location: index, length: 1))
+            }
+        }
+        return result
+    }
+
     public func replaceSourceText(_ block: SourceTextBlock, with text: String, fontSize: Double, color: UIColor) throws {
         guard let snapshot = sourceEditorSnapshot, snapshot.revision == revision else { throw PDFEditorError.staleSourceSelection }
         guard text.count <= 2_000, !text.contains(where: { $0.isNewline }),
@@ -55,7 +70,7 @@ extension PDFEditingSession {
               (3...200).contains(fontSize) else { throw PDFEditorError.sourceTextUnsupported }
         let page = try page(at: block.pageIndex), crop = page.bounds(for: .cropBox)
         let font = Self.replacementFont(for: block).withSize(fontSize)
-        let attributed = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
+        let attributed = Self.sourceAttributedText(text, font: font, color: color, block: block)
         let line = CTLineCreateWithAttributedString(attributed)
         let width = CTLineGetTypographicBounds(line, nil, nil, nil)
         let glyphBounds = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])

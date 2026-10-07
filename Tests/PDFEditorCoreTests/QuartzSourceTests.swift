@@ -45,20 +45,7 @@ final class QuartzSourceTests: XCTestCase {
         context.endPDFPage(); context.closePDF()
         let data = bytes as Data, editor = try NativeContentEditor(data: data)
         let blocks = try editor.textBlocks(onPage: 0)
-        if blocks.isEmpty { try logSource(data) }
         XCTAssertFalse(blocks.isEmpty)
-    }
-
-    private func logSource(_ data: Data) throws {
-        let object = try PDFObjectDocument(data: data), page = try XCTUnwrap(object.pages().first)
-        print("NATIVE_CONTENT=" + (try object.pageContent(page)).base64EncodedString())
-        let resources = try object.dictionary(try XCTUnwrap(object.inherited("Resources", page: page)))
-        let fonts = try object.dictionary(try XCTUnwrap(resources["Font"]))
-        for (key, value) in fonts {
-            let font = try object.dictionary(value)
-            print("NATIVE_FONT \(key) \(font["BaseFont"]?.name ?? "-") \(font["Subtype"]?.name ?? "-") encoding=\(String(describing: font["Encoding"]))")
-            if let cmap = font["ToUnicode"] { print("NATIVE_CMAP=" + (try object.decodedStream(cmap)).base64EncodedString()) }
-        }
     }
 
     private func quartz(_ text: String, at point: CGPoint) throws -> Data {

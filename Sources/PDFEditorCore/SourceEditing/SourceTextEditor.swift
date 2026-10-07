@@ -23,6 +23,8 @@ public struct SourceTextBlock: Identifiable {
     public let fontSize: Double
     public let baselineX: Double
     public let baselineY: Double
+    public let letterSpacing: Double
+    public let wordSpacing: Double
     let snapshot: UUID
     let operands: [Range<Int>]
     let insertionOffset: Int
@@ -67,6 +69,7 @@ public final class NativeContentEditor {
         var textStates: [(String, Double, Double, Double, Double, Double, Double)] = []
         var active = false, supported = true, marked = 0
         var text = "", ranges: [Range<Int>] = [], anchor: PDFMatrix?, blockFont = "", blockSize = 0.0
+        var blockSpacing = 0.0, blockWordSpacing = 0.0
         var blocks: [SourceTextBlock] = []
         while true {
             lexer.skip(); if lexer.position == lexer.bytes.count { break }
@@ -131,15 +134,15 @@ public final class NativeContentEditor {
                 guard active, operands.count == 1 else { throw PDFEditorError.invalidDocument }
                 if rendering >= 4 { state.clipped = true }
                 let effective = state.matrix.concatenating(textMatrix)
-                guard rendering == 0, abs(spacing*effective.a) <= 0.01, abs(wordSpacing*effective.a) <= 0.01, horizontal == 100, abs(rise*effective.a) <= 0.01,
+                guard rendering == 0, abs(spacing) <= size * 0.25, abs(wordSpacing) <= size * 0.5, horizontal == 100, abs(rise*effective.a) <= 0.01,
                       abs(effective.b) < 0.001, abs(effective.c) < 0.001, effective.a > 0,
                       abs(effective.d-effective.a) < 0.001, size > 0, let fontValue = fonts[font],
                       let decoder = try? PDFFontDecoder(document: document, value: fontValue) else {
                     supported = false; operands.removeAll(); continue
                 }
                 if let first = anchor {
-                    if abs(first.y-effective.y) > 0.01 || blockFont.split(separator: "+").last != decoder.name.split(separator: "+").last || abs(blockSize-size*effective.a) > 0.01 { supported = false }
-                } else { anchor = effective; blockFont = decoder.name; blockSize = size*effective.a }
+                    if abs(blockSpacing-spacing*effective.a) > 0.01 || abs(blockWordSpacing-wordSpacing*effective.a) > 0.01 || abs(first.y-effective.y) > 0.01 || blockFont.split(separator: "+").last != decoder.name.split(separator: "+").last || abs(blockSize-size*effective.a) > 0.01 { supported = false }
+                } else { anchor = effective; blockFont = decoder.name; blockSize = size*effective.a; blockSpacing = spacing*effective.a; blockWordSpacing = wordSpacing*effective.a }
                 let strings: [Data]
                 if let string = values[0].string { strings = [string] }
                 else if let array = values[0].array, array.allSatisfy({ $0.string != nil || $0.number != nil }) { strings = array.compactMap(\.string) }
@@ -151,7 +154,7 @@ public final class NativeContentEditor {
                 if supported, let anchor, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                    text.count <= 2_000, (3...200).contains(blockSize) {
                     blocks.append(SourceTextBlock(id: UUID(), pageIndex: index, text: text, fontName: blockFont,
-                                                  fontSize: blockSize, baselineX: anchor.x, baselineY: anchor.y,
+                                                  fontSize: blockSize, baselineX: anchor.x, baselineY: anchor.y, letterSpacing: blockSpacing, wordSpacing: blockWordSpacing,
                                                   snapshot: snapshot, operands: ranges, insertionOffset: lexer.position, transform: state.matrix))
                 }
             default:
@@ -176,7 +179,7 @@ public final class NativeContentEditor {
             }
         }
         let block = SourceTextBlock(id: UUID(), pageIndex: first.pageIndex, text: text, fontName: first.fontName,
-            fontSize: first.fontSize, baselineX: first.baselineX, baselineY: first.baselineY, snapshot: snapshot,
+            fontSize: first.fontSize, baselineX: first.baselineX, baselineY: first.baselineY, letterSpacing: first.letterSpacing, wordSpacing: first.wordSpacing, snapshot: snapshot,
             operands: members.flatMap(\.operands).sorted(by: { $0.lowerBound < $1.lowerBound }),
             insertionOffset: last.insertionOffset, transform: last.transform)
         combined[block.id] = block
