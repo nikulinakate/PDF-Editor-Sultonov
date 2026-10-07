@@ -17,6 +17,7 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var records: [DocumentRecord] = []
     @Published var error: Message?
     private let root: URL
+    private var isReady = false
     private var indexURL: URL { root.appendingPathComponent("index.json") }
 
     init(root: URL? = nil) {
@@ -27,6 +28,7 @@ final class LibraryStore: ObservableObject {
             if FileManager.default.fileExists(atPath: indexURL.path) {
                 records = try JSONDecoder().decode([DocumentRecord].self, from: Data(contentsOf: indexURL))
             }
+            isReady = true
         } catch { self.error = Message(error) }
     }
 
@@ -105,6 +107,8 @@ final class LibraryStore: ObservableObject {
     }
 
     private func persist(_ next: [DocumentRecord]) throws {
+        // A corrupt/unreadable index must never be overwritten with an empty library.
+        guard isReady else { throw CocoaError(.fileReadCorruptFile) }
         try JSONEncoder().encode(next).write(to: indexURL, options: [.atomic, .completeFileProtectionUnlessOpen])
         records = next
     }

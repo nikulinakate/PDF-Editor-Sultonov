@@ -34,7 +34,7 @@ def configurations(label, settings):
         values.update({"SWIFT_OPTIMIZATION_LEVEL": "-Onone" if mode == "Debug" else "-O",
                        "DEBUG_INFORMATION_FORMAT": "dwarf" if mode == "Debug" else "dwarf-with-dsym"})
         if mode == "Debug":
-            values.update({"ENABLE_TESTABILITY": "YES", "SWIFT_ACTIVE_COMPILATION_CONDITIONS": "DEBUG"})
+            values.update({"ENABLE_TESTABILITY": "YES", "SWIFT_ACTIVE_COMPILATION_CONDITIONS": "DEBUG", "ONLY_ACTIVE_ARCH": "YES"})
         refs.append(add(label + mode, "XCBuildConfiguration", name=mode, buildSettings=values))
     return add(label + "configs", "XCConfigurationList", buildConfigurations=refs,
                defaultConfigurationIsVisible=0, defaultConfigurationName="Release")

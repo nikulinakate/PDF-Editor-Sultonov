@@ -80,7 +80,7 @@ struct TextInspectorView: View {
                 .task {
                     do {
                         lines = try ContentAnalyzer.textLines(in: session.document, pageIndex: pageIndex)
-                        if let page = session.document.page(at: pageIndex) { summary = try PDFStreamInspector.inspect(page: page) }
+                        if let page = session.document.page(at: pageIndex), page.pageRef != nil { summary = try PDFStreamInspector.inspect(page: page) }
                     } catch { self.error = Message(error) }
                 }
                 .sheet(isPresented: Binding(get: { recognizedText != nil }, set: { if !$0 { recognizedText = nil } })) {

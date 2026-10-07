@@ -130,6 +130,19 @@ final class PDFEngineTests: XCTestCase {
         XCTAssertTrue(library.records.isEmpty)
     }
 
+    func testCorruptIndexCannotBeOverwrittenByNewImport() throws {
+        let session = try makeSession()
+        let root = session.sourceURL.deletingLastPathComponent().appendingPathComponent("CorruptLibrary")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let index = root.appendingPathComponent("index.json")
+        let corrupt = Data("{invalid".utf8)
+        try corrupt.write(to: index)
+        let library = LibraryStore(root: root)
+        XCTAssertNotNil(library.error)
+        XCTAssertThrowsError(try library.importPDF(from: session.sourceURL))
+        XCTAssertEqual(try Data(contentsOf: index), corrupt)
+    }
+
     func testEncryptedDocumentRemainsReadOnlyAndEncrypted() throws {
         let session = try makeSession()
         let data = try XCTUnwrap(session.document.dataRepresentation(options: [.userPasswordOption: "secret", .ownerPasswordOption: "owner"]))

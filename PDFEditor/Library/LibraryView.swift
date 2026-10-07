@@ -10,6 +10,7 @@ struct LibraryView: View {
     @State private var selected: DocumentRecord?
     @State private var importing = false
     @State private var scanning = false
+    @State private var scannedRecord: DocumentRecord?
     @State private var showingHelp = false
     @State private var renaming: DocumentRecord?
     @State private var name = ""
@@ -68,8 +69,10 @@ struct LibraryView: View {
                 }
             }
             .fullScreenCover(item: $selected) { record in EditorLoader(record: record).environmentObject(library) }
-            .sheet(isPresented: $scanning) {
-                ScannerView { images in scanning = false; perform { selected = try library.createFromImages(images) } }
+            .sheet(isPresented: $scanning, onDismiss: {
+                if let scannedRecord { selected = scannedRecord; self.scannedRecord = nil }
+            }) {
+                ScannerView { images in perform { scannedRecord = try library.createFromImages(images) }; scanning = false }
                     onError: { error in scanning = false; library.error = Message(error) }
                     onCancel: { scanning = false }
             }
