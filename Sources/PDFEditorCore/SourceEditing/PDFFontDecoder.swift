@@ -9,6 +9,9 @@ struct PDFFontDecoder {
     init(document: PDFObjectDocument, value: PDFValue) throws {
         let font = try document.dictionary(value)
         guard font["Subtype"]?.name != "Type3", font["Encoding"]?.name != "Identity-V" else { throw PDFEditorError.sourceTextUnsupported }
+        if font["Subtype"]?.name == "Type0" {
+            guard font["Encoding"]?.name == "Identity-H" else { throw PDFEditorError.sourceTextUnsupported }
+        }
         name = font["BaseFont"]?.name ?? "Unknown"
         if let cmap = font["ToUnicode"] {
             unicode = try Self.readCMap(document.decodedStream(cmap))

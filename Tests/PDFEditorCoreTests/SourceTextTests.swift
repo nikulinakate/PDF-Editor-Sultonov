@@ -57,6 +57,7 @@ final class SourceTextTests: XCTestCase {
             "BT /F1 20 Tf 30 700 Td (One) Tj 0 -24 Td (Two) Tj ET",
             "BT /F1 20 Tf 0 1 -1 0 30 700 Tm (Rotated) Tj ET",
             "BT /F1 20 Tf 7 Tr 30 700 Td (Clip) Tj ET",
+            "BT /F1 20 Tf 7 Tr 30 700 Td (Clip) Tj ET BT 0 Tr 30 600 Td (Still clipped) Tj ET",
             "/Span << /ActualText (Hidden) >> BDC BT /F1 20 Tf 30 700 Td (Tagged) Tj ET EMC",
             "0 0 200 200 re W n BT /F1 20 Tf 30 700 Td (Clipped) Tj ET"
         ] {

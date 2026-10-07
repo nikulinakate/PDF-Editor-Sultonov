@@ -86,6 +86,10 @@ public final class NativeContentEditor {
                 (font, size, rendering, spacing, wordSpacing, horizontal, rise) = savedText
             case "cm": if let m = matrix() { state.matrix = state.matrix.concatenating(m) } else { throw PDFEditorError.invalidDocument }
             case "W", "W*": state.clipped = true
+            case "gs":
+                guard let name = values.first?.name, let states = resources["ExtGState"],
+                      let entry = try document.dictionary(states)[name] else { throw PDFEditorError.invalidDocument }
+                if try document.dictionary(entry)["Font"] != nil { state.clipped = true }
             case "BDC", "BMC": marked += 1
             case "EMC": marked = max(0, marked - 1)
             case "BT":
@@ -107,6 +111,7 @@ public final class NativeContentEditor {
             case "Ts": rise = numbers.first ?? -1
             case "Tj", "TJ":
                 guard active, operands.count == 1 else { throw PDFEditorError.invalidDocument }
+                if rendering >= 4 { state.clipped = true }
                 let effective = state.matrix.concatenating(textMatrix)
                 guard rendering == 0, spacing == 0, wordSpacing == 0, horizontal == 100, rise == 0,
                       abs(effective.b) < 0.001, abs(effective.c) < 0.001, effective.a > 0,
