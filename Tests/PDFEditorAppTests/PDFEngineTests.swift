@@ -1,6 +1,6 @@
 import XCTest
 import PDFKit
-import PDFEditorCore
+@testable import PDFEditorCore
 import UIKit
 @testable import PDFEditor
 
@@ -190,6 +190,7 @@ final class PDFEngineTests: XCTestCase {
 
     func testSourceOverflowAndMultilineLeaveDocumentUnchanged() throws {
         let session = try makeSession()
+        try logSource(session.serialized())
         let block = try XCTUnwrap(session.sourceTextBlocks(onPage: 0).first)
         let before = session.document.page(at: 0)?.string
         XCTAssertThrowsError(try session.replaceSourceText(block, with: String(repeating: "W", count: 150), fontSize: 50, color: .black))
@@ -237,6 +238,18 @@ final class PDFEngineTests: XCTestCase {
             page.draw(with: .mediaBox, to: context)
         }
         return pixels
+    }
+
+    private func logSource(_ data: Data) throws {
+        let object = try PDFObjectDocument(data: data), page = try XCTUnwrap(object.pages().first)
+        print("IOS_CONTENT=" + (try object.pageContent(page)).base64EncodedString())
+        let resources = try object.dictionary(try XCTUnwrap(object.inherited("Resources", page: page)))
+        let fonts = try object.dictionary(try XCTUnwrap(resources["Font"]))
+        for (key, value) in fonts {
+            let font = try object.dictionary(value)
+            print("IOS_FONT \(key) \(font["BaseFont"]?.name ?? "-") \(font["Subtype"]?.name ?? "-") encoding=\(String(describing: font["Encoding"]))")
+            if let cmap = font["ToUnicode"] { print("IOS_CMAP=" + (try object.decodedStream(cmap)).base64EncodedString()) }
+        }
     }
 
     private func makeSession() throws -> PDFEditingSession {
