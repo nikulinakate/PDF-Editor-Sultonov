@@ -16,7 +16,7 @@ struct PDFMatrix {
 }
 
 public struct SourceTextBlock: Identifiable {
-    public let id: Int
+    public let id: UUID
     public let pageIndex: Int
     public let text: String
     public let fontName: String
@@ -37,6 +37,7 @@ public final class NativeContentEditor {
     private let document: PDFObjectDocument
     private let pages: [PDFReference]
     private var inspected: [Int: [SourceTextBlock]] = [:]
+    private var combined: [UUID: SourceTextBlock] = [:]
 
     public init(data: Data) throws {
         document = try PDFObjectDocument(data: data)
@@ -52,6 +53,10 @@ public final class NativeContentEditor {
         let page = pages[index]
         let resources = try document.inherited("Resources", page: page).map { try document.dictionary($0) } ?? [:]
         let fonts = try resources["Font"].map { try document.dictionary($0) } ?? [:]
+        let media = try document.inherited("MediaBox", page: page).map { try document.resolved($0).array?.compactMap(\.number) } ?? nil
+        guard let media, media.count == 4 else { throw PDFEditorError.invalidDocument }
+        var pathRectangle: (Double, Double, Double, Double)?
+        var pathSegments = 0
         let content = try document.pageContent(page)
         var lexer = PDFLexer(content)
         var operands: [(PDFValue, Range<Int>)] = []
@@ -85,7 +90,20 @@ public final class NativeContentEditor {
                 state = saved
                 (font, size, rendering, spacing, wordSpacing, horizontal, rise) = savedText
             case "cm": if let m = matrix() { state.matrix = state.matrix.concatenating(m) } else { throw PDFEditorError.invalidDocument }
-            case "W", "W*": state.clipped = true
+            case "re":
+                if numbers.count == 4, pathSegments == 0, abs(state.matrix.b) < 0.001, abs(state.matrix.c) < 0.001 {
+                    let x1 = state.matrix.a * numbers[0] + state.matrix.x, y1 = state.matrix.d * numbers[1] + state.matrix.y
+                    let x2 = x1 + state.matrix.a * numbers[2], y2 = y1 + state.matrix.d * numbers[3]
+                    pathRectangle = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
+                } else { pathRectangle = nil }
+                pathSegments += 1
+            case "m", "l", "c", "v", "y", "h": pathSegments += 1; pathRectangle = nil
+            case "W", "W*":
+                if let rect = pathRectangle, pathSegments == 1,
+                   rect.0 <= media[0] + 0.01, rect.1 <= media[1] + 0.01,
+                   rect.2 >= media[2] - 0.01, rect.3 >= media[3] - 0.01 {} // Quartz's ordinary page clip.
+                else { state.clipped = true }
+            case "n", "S", "s", "f", "F", "f*", "B", "B*", "b", "b*": pathSegments = 0; pathRectangle = nil
             case "gs":
                 guard let name = values.first?.name, let states = resources["ExtGState"],
                       let entry = try document.dictionary(states)[name] else { throw PDFEditorError.invalidDocument }
@@ -113,14 +131,14 @@ public final class NativeContentEditor {
                 guard active, operands.count == 1 else { throw PDFEditorError.invalidDocument }
                 if rendering >= 4 { state.clipped = true }
                 let effective = state.matrix.concatenating(textMatrix)
-                guard rendering == 0, spacing == 0, wordSpacing == 0, horizontal == 100, rise == 0,
+                guard rendering == 0, abs(spacing*effective.a) <= 0.01, abs(wordSpacing*effective.a) <= 0.01, horizontal == 100, abs(rise*effective.a) <= 0.01,
                       abs(effective.b) < 0.001, abs(effective.c) < 0.001, effective.a > 0,
                       abs(effective.d-effective.a) < 0.001, size > 0, let fontValue = fonts[font],
                       let decoder = try? PDFFontDecoder(document: document, value: fontValue) else {
                     supported = false; operands.removeAll(); continue
                 }
                 if let first = anchor {
-                    if abs(first.y-effective.y) > 0.01 || blockFont != decoder.name || abs(blockSize-size*effective.a) > 0.01 { supported = false }
+                    if abs(first.y-effective.y) > 0.01 || blockFont.split(separator: "+").last != decoder.name.split(separator: "+").last || abs(blockSize-size*effective.a) > 0.01 { supported = false }
                 } else { anchor = effective; blockFont = decoder.name; blockSize = size*effective.a }
                 let strings: [Data]
                 if let string = values[0].string { strings = [string] }
@@ -132,7 +150,7 @@ public final class NativeContentEditor {
                 guard active else { throw PDFEditorError.invalidDocument }; active = false
                 if supported, let anchor, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                    text.count <= 2_000, (3...200).contains(blockSize) {
-                    blocks.append(SourceTextBlock(id: lexer.position, pageIndex: index, text: text, fontName: blockFont,
+                    blocks.append(SourceTextBlock(id: UUID(), pageIndex: index, text: text, fontName: blockFont,
                                                   fontSize: blockSize, baselineX: anchor.x, baselineY: anchor.y,
                                                   snapshot: snapshot, operands: ranges, insertionOffset: lexer.position, transform: state.matrix))
                 }
@@ -146,9 +164,28 @@ public final class NativeContentEditor {
         return blocks
     }
 
+    /// Join adjacent objects only after the caller verifies they cover one displayed line.
+    public func combining(_ members: [SourceTextBlock], text: String) throws -> SourceTextBlock {
+        guard !consumed, let first = members.min(by: { $0.baselineX < $1.baselineX }),
+              let last = members.max(by: { $0.insertionOffset < $1.insertionOffset }),
+              Set(members.map(\.id)).count == members.count else { throw PDFEditorError.staleSourceSelection }
+        for member in members {
+            guard member.snapshot == snapshot, member.pageIndex == first.pageIndex,
+                  inspected[first.pageIndex]?.contains(where: { $0.id == member.id && $0.operands == member.operands }) == true else {
+                throw PDFEditorError.staleSourceSelection
+            }
+        }
+        let block = SourceTextBlock(id: UUID(), pageIndex: first.pageIndex, text: text, fontName: first.fontName,
+            fontSize: first.fontSize, baselineX: first.baselineX, baselineY: first.baselineY, snapshot: snapshot,
+            operands: members.flatMap(\.operands).sorted(by: { $0.lowerBound < $1.lowerBound }),
+            insertionOffset: last.insertionOffset, transform: last.transform)
+        combined[block.id] = block
+        return block
+    }
+
     /// Donor text is generated by CoreText with its font/Unicode resources. It becomes ordinary page content.
-    public func replacing(_ block: SourceTextBlock, withTextPDF donorData: Data) throws -> Data {
-        guard !consumed, block.snapshot == snapshot, let selected = inspected[block.pageIndex]?.first(where: { $0.id == block.id }),
+    public func replacing(_ block: SourceTextBlock, withTextPDF donorData: Data, donorBaselineX: Double = 0, donorBaselineY: Double = 0) throws -> Data {
+        guard !consumed, block.snapshot == snapshot, let selected = combined[block.id] ?? inspected[block.pageIndex]?.first(where: { $0.id == block.id }),
               selected.text == block.text, selected.operands == block.operands else { throw PDFEditorError.staleSourceSelection }
         let page = pages[block.pageIndex], donor = try PDFObjectDocument(data: donorData)
         guard let donorPage = try donor.pages().first else { throw PDFEditorError.invalidDocument }
@@ -183,18 +220,36 @@ public final class NativeContentEditor {
             }
             resources[category] = .dictionary(target)
         }
+        let donorMedia = try donor.inherited("MediaBox", page: donorPage).map { try donor.resolved($0).array?.compactMap(\.number) } ?? nil
+        guard let donorMedia, donorMedia.count == 4 else { throw PDFEditorError.invalidDocument }
         let donorContent = try donor.pageContent(donorPage)
         var donorLexer = PDFLexer(donorContent), edits: [(Range<Int>, Data)] = []
+        var donorOperands: [(PDFValue, Range<Int>)] = [], pageClip: Range<Int>?, clipConfirmed = false
         while true {
             donorLexer.skip(); if donorLexer.position == donorLexer.bytes.count { break }
             let start = donorLexer.position, value = try donorLexer.value()
             if let name = value.name, let replacement = rename[name] { edits.append((start..<donorLexer.position, try pdfEncoded(.name(replacement)))) }
+            if case .keyword(let command) = value {
+                let numbers = donorOperands.compactMap { $0.0.number }
+                if command == "re", numbers.count == 4,
+                   abs(numbers[0]-donorMedia[0]) < 0.01, abs(numbers[1]-donorMedia[1]) < 0.01,
+                   abs(numbers[2]-(donorMedia[2]-donorMedia[0])) < 0.01,
+                   abs(numbers[3]-(donorMedia[3]-donorMedia[1])) < 0.01, let first = donorOperands.first {
+                    pageClip = first.1.lowerBound..<donorLexer.position; clipConfirmed = false
+                } else if (command == "W" || command == "W*"), pageClip != nil { clipConfirmed = true }
+                else if command == "n", let clip = pageClip, clipConfirmed {
+                    // The donor page clip would crop descenders after placement on another page.
+                    edits.append((clip.lowerBound..<donorLexer.position, Data())); pageClip = nil; clipConfirmed = false
+                } else { pageClip = nil; clipConfirmed = false }
+                donorOperands.removeAll()
+            } else { donorOperands.append((value, start..<donorLexer.position)) }
+            guard donorOperands.count < 10_000 else { throw PDFEditorError.sourceStructureUnsupported }
         }
         var inserted = donorContent
-        for (range, replacement) in edits.reversed() { inserted.replaceSubrange(range, with: replacement) }
+        for (range, replacement) in edits.sorted(by: { $0.0.lowerBound > $1.0.lowerBound }) { inserted.replaceSubrange(range, with: replacement) }
         var content = try document.pageContent(page)
         // Restore a page-space CTM around the donor, then restore the surrounding graphics state.
-        let injection = Data(("\nq\n" + (try block.transform.inverse()).command + "1 0 0 1 \(pdfNumber(block.baselineX)) \(pdfNumber(block.baselineY)) cm\n").utf8) + inserted + Data("\nQ\n".utf8)
+        let injection = Data(("\nq\n" + (try block.transform.inverse()).command + "1 0 0 1 \(pdfNumber(block.baselineX-donorBaselineX)) \(pdfNumber(block.baselineY-donorBaselineY)) cm\n").utf8) + inserted + Data("\nQ\n".utf8)
         content.insert(contentsOf: injection, at: block.insertionOffset)
         for range in block.operands.reversed() { content.replaceSubrange(range, with: Data((content[range.lowerBound] == 91 ? "[]" : "()").utf8)) }
         var pageDictionary = try document.dictionary(.reference(page))

@@ -4,7 +4,7 @@ struct PDFFontDecoder {
     let name: String
     private let unicode: [Data: String]
     private let codeLengths: [Int]
-    private let simple: Bool
+    private let simpleEncoding: String.Encoding?
 
     init(document: PDFObjectDocument, value: PDFValue) throws {
         let font = try document.dictionary(value)
@@ -16,22 +16,27 @@ struct PDFFontDecoder {
         if let cmap = font["ToUnicode"] {
             unicode = try Self.readCMap(document.decodedStream(cmap))
             codeLengths = Set(unicode.keys.map(\.count)).sorted(by: >)
-            simple = false
+            simpleEncoding = nil
             guard !unicode.isEmpty else { throw PDFEditorError.sourceTextUnsupported }
         } else {
             guard font["Subtype"]?.name != "Type0", font["Subtype"]?.name != "Type3" else { throw PDFEditorError.sourceTextUnsupported }
             if let encoding = font["Encoding"] {
-                guard try document.resolved(encoding).name == "WinAnsiEncoding" else { throw PDFEditorError.sourceTextUnsupported }
+                switch try document.resolved(encoding).name {
+                case "WinAnsiEncoding": simpleEncoding = .windowsCP1252
+                case "MacRomanEncoding": simpleEncoding = .macOSRoman
+                default: throw PDFEditorError.sourceTextUnsupported
+                }
             } else {
+                simpleEncoding = .ascii
                 guard ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique", "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic", "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"].contains(name) else { throw PDFEditorError.sourceTextUnsupported }
             }
-            unicode = [:]; codeLengths = [1]; simple = true
+            unicode = [:]; codeLengths = [1]
         }
     }
 
     func decode(_ bytes: Data) throws -> String {
-        if simple {
-            guard let text = String(data: bytes, encoding: .windowsCP1252) else { throw PDFEditorError.sourceTextUnsupported }
+        if let simpleEncoding {
+            guard let text = String(data: bytes, encoding: simpleEncoding) else { throw PDFEditorError.sourceTextUnsupported }
             return text
         }
         var text = ""; var position = 0

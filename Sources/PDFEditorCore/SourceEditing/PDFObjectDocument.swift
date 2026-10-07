@@ -28,6 +28,9 @@ final class PDFObjectDocument {
                       (0...65535).contains(generation) else { throw PDFEditorError.invalidDocument }
                 let state = try lexer.word()
                 if state == "n" {
+                    // PDFKit emits unused slots as in-use entries at offset zero. Ignore those slots;
+                    // a reachable reference to one still fails in object(_:).
+                    if position == 0 { continue }
                     guard number > 0, position > 0, position < data.count else { throw PDFEditorError.invalidDocument }
                     let ref = PDFReference(object: number, generation: generation)
                     guard offsets[ref] == nil else { throw PDFEditorError.invalidDocument }

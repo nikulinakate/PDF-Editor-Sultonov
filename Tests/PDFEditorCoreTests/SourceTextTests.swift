@@ -94,6 +94,25 @@ final class SourceTextTests: XCTestCase {
         XCTAssertThrowsError(try NativeContentEditor(data: data))
     }
 
+    func testPDFKitUnusedInUseXrefSlotsAreIgnored() throws {
+        let data = fixture("BT /F1 20 Tf 30 700 Td (Text) Tj ET")
+        let source = String(decoding: data, as: UTF8.self)
+        let withHole = source.replacingOccurrences(of: "xref\n0 6\n", with: "xref\n0 7\n")
+            .replacingOccurrences(of: "trailer\n", with: "0000000000 00000 n \ntrailer\n")
+        XCTAssertEqual(try NativeContentEditor(data: Data(withHole.utf8)).textBlocks(onPage: 0).first?.text, "Text")
+    }
+
+    func testDonorPageClipIsRemovedAndTextCanBeSelectedAgain() throws {
+        let source = try NativeContentEditor(data: fixture("0 0 595 842 re W n BT /F1 20 Tf 30 700 Td (Original) Tj ET"))
+        let block = try XCTUnwrap(source.textBlocks(onPage: 0).first)
+        let donor = fixture("0 0 595 842 re W n BT /F1 20 Tf 20 200 Td (Donor) Tj ET")
+        let data = try source.replacing(block, withTextPDF: donor, donorBaselineX: 20, donorBaselineY: 200)
+        let next = try XCTUnwrap(NativeContentEditor(data: data).textBlocks(onPage: 0).first)
+        XCTAssertEqual(next.text, "Donor")
+        XCTAssertEqual(next.baselineX, 30)
+        XCTAssertEqual(next.baselineY, 700)
+    }
+
     private func fixture(_ text: String, shared: Bool = false) -> Data {
         let stream = "0 0 10 10 re f\n" + text
         var objects = [

@@ -9,9 +9,31 @@ extension PDFEditingSession {
     public func sourceTextBlocks(onPage index: Int) throws -> [SourceTextBlock] {
         guard canEditSourceText else { throw PDFEditorError.permissionDenied }
         if sourceEditorSnapshot?.revision != revision {
-            sourceEditorSnapshot = (revision, try NativeContentEditor(data: serialized()))
+            sourceEditorSnapshot = (revision, try NativeContentEditor(data: serialized()), [:])
         }
-        return try sourceEditorSnapshot!.editor.textBlocks(onPage: index)
+        if let cached = sourceEditorSnapshot?.blocks[index] { return cached }
+        let editor = sourceEditorSnapshot!.editor
+        let raw = try editor.textBlocks(onPage: index), page = try page(at: index)
+        var pending = Set(raw.map(\.id)), blocks: [SourceTextBlock] = []
+        func normalized(_ text: String) -> String { String(text.filter { !$0.isWhitespace }) }
+        for block in raw where pending.contains(block.id) {
+            let point = CGPoint(x: block.baselineX + 1, y: block.baselineY + block.fontSize * 0.3)
+            if let line = page.selectionForLine(at: point), let lineText = line.string {
+                let bounds = line.bounds(for: page).insetBy(dx: -2, dy: -2)
+                let members = raw.filter {
+                    pending.contains($0.id) && abs($0.baselineY - block.baselineY) <= 0.5 &&
+                    bounds.contains(CGPoint(x: $0.baselineX + 1, y: $0.baselineY + $0.fontSize * 0.3))
+                }.sorted { $0.baselineX < $1.baselineX }
+                if members.count > 1, normalized(members.map(\.text).joined()) == normalized(lineText) {
+                    blocks.append(try editor.combining(members, text: lineText.trimmingCharacters(in: .newlines)))
+                    for member in members { pending.remove(member.id) }
+                    continue
+                }
+            }
+            blocks.append(block); pending.remove(block.id)
+        }
+        sourceEditorSnapshot?.blocks[index] = blocks
+        return blocks
     }
 
     public func sourceTextBounds(_ block: SourceTextBlock) throws -> CGRect {
@@ -52,11 +74,11 @@ extension PDFEditingSession {
             context.beginPage()
             let cg = context.cgContext
             cg.translateBy(x: 0, y: 1_000); cg.scaleBy(x: 1, y: -1)
-            cg.textMatrix = .identity; cg.textPosition = .zero
+            cg.textMatrix = .identity; cg.textPosition = CGPoint(x: 20, y: 200)
             CTLineDraw(line, cg)
         }
         do {
-            let result = try snapshot.editor.replacing(block, withTextPDF: donor)
+            let result = try snapshot.editor.replacing(block, withTextPDF: donor, donorBaselineX: 20, donorBaselineY: 200)
             guard let replacement = PDFDocument(data: result), replacement.pageCount == document.pageCount else { throw PDFEditorError.exportFailed }
             try replaceSourceDocument(replacement)
         } catch {

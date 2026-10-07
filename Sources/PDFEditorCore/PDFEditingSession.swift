@@ -11,7 +11,7 @@ public final class PDFEditingSession: ObservableObject {
     @Published public private(set) var canUndo = false
     @Published public private(set) var canRedo = false
     public let sourceURL: URL
-    var sourceEditorSnapshot: (revision: Int, editor: NativeContentEditor)?
+    var sourceEditorSnapshot: (revision: Int, editor: NativeContentEditor, blocks: [Int: [SourceTextBlock]])?
     public var canEditSourceText: Bool { !document.isLocked && !document.isEncrypted && document.allowsDocumentChanges }
     private var history = SnapshotHistory()
 
