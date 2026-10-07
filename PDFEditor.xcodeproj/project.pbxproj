@@ -53,6 +53,12 @@
 			"path" = "PDFEditor/Editor/SignatureSheet.swift";
 			"sourceTree" = "SOURCE_ROOT";
 		};
+		"D9E4FEB63655CC3B1F6EDE79" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "PDFEditor/Editor/SourceTextSheet.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
 		"40FEBA1C7DE845434FC7A357" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -189,6 +195,7 @@
 				"A7939C48697CD4D766FC4E4C",
 				"238CF574C7F70B3981C9AAA9",
 				"20BABDEF56F99547FADA6945",
+				"D9E4FEB63655CC3B1F6EDE79",
 				"40FEBA1C7DE845434FC7A357",
 				"B04BB68B880DEA1507DEB295",
 				"6B973C1F4E0CC648AA77FB63",
@@ -340,6 +347,10 @@
 			"isa" = "PBXBuildFile";
 			"fileRef" = "20BABDEF56F99547FADA6945";
 		};
+		"0A58B4E3D063BBA87E94BEC6" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "D9E4FEB63655CC3B1F6EDE79";
+		};
 		"35DF0B47A135ADE0A7584540" = {
 			"isa" = "PBXBuildFile";
 			"fileRef" = "40FEBA1C7DE845434FC7A357";
@@ -380,6 +391,7 @@
 				"6AE7B71CCBB5C7AD18D28121",
 				"A45D8323142F9D4B57766546",
 				"BCE6963C716589235BAFD7E7",
+				"0A58B4E3D063BBA87E94BEC6",
 				"35DF0B47A135ADE0A7584540",
 				"62C08851CE17A5DCBB95BA51",
 				"DC84886ABBC8D688E3FC30D2",

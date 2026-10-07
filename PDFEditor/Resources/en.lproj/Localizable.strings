@@ -130,3 +130,11 @@
 "underline" = "Underline";
 "undo" = "Undo";
 "width" = "Width";
+"tool.editSource" = "Edit text";
+"tool.hint.editSource" = "Tap an existing text line";
+"source.title" = "Edit source text";
+"source.original" = "Original text";
+"source.replacement" = "New text";
+"source.font" = "Replacement font";
+"source.hint" = "Single-line replacement. The selected text is removed from page content. Font substitution may change its appearance. No automatic paragraph reflow.";
+"source.deleteHint" = "Leave the field empty to delete this text.";

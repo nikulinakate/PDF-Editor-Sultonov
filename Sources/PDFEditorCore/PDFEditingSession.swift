@@ -11,7 +11,8 @@ public final class PDFEditingSession: ObservableObject {
     @Published public private(set) var canUndo = false
     @Published public private(set) var canRedo = false
     public let sourceURL: URL
-    public let contentEditor = NativeContentEditor()
+    var sourceEditorSnapshot: (revision: Int, editor: NativeContentEditor)?
+    public var canEditSourceText: Bool { !document.isLocked && !document.isEncrypted && document.allowsContentEditing }
     private var history = SnapshotHistory()
 
     public var canAnnotate: Bool { !document.isLocked && !document.isEncrypted && document.allowsCommenting }
@@ -89,6 +90,10 @@ public final class PDFEditingSession: ObservableObject {
             if let restored = PDFDocument(data: before) { document = restored; revision += 1 }
             throw error
         }
+    }
+
+    func replaceSourceDocument(_ replacement: PDFDocument) throws {
+        try mutate(allowed: canEditSourceText) { document = replacement }
     }
 
     private func changed() {

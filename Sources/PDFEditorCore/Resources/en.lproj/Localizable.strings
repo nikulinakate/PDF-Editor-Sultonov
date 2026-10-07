@@ -7,3 +7,7 @@
 "error.exportFailed" = "The PDF could not be saved. Your previous file is unchanged.";
 "error.invalidName" = "Enter a valid document name without /, \\, or :.";
 "error.unsupportedContentEditing" = "Editing existing PDF text is not available in this version.";
+"error.sourceStructureUnsupported" = "This PDF structure cannot yet be edited: supported files use classic cross-reference tables and plain or Flate content streams. Encrypted, signed and XFA documents are unsupported.";
+"error.sourceTextUnsupported" = "Select a supported horizontal text line. Multiline objects, unusual fonts, clipping, tags, text inside forms and scans cannot yet be edited. New text must fit on one line.";
+"error.staleSourceSelection" = "The document changed. Select the text again.";
+"error.sourceTextOverflow" = "New text goes beyond the page or overlaps another editable line. Shorten the text or reduce its font size.";

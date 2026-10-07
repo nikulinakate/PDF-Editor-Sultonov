@@ -41,8 +41,8 @@ all_source = "\n".join(path.read_text() for path in (ROOT / "PDFEditor").rglob("
 for key in re.findall(r'L\("([^"\\]+)"\)', all_source):
     require(key in app_en, f"Unlocalized key: {key}")
 for prefix, suffixes in {
-    "tool.": ["browse", "text", "ink", "signature", "shape", "eraser"],
-    "tool.hint.": ["browse", "text", "ink", "signature", "shape", "eraser"],
+    "tool.": ["browse", "editSource", "text", "ink", "signature", "shape", "eraser"],
+    "tool.hint.": ["browse", "editSource", "text", "ink", "signature", "shape", "eraser"],
     "library.": ["all", "favorites", "trash", "empty", "noResults"],
     "demo.title.": ["0", "1", "2"], "demo.body.": ["0", "1", "2"],
     "text.": ["add", "edit"], "favorite.": ["add", "remove"]

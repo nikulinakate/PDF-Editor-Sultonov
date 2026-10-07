@@ -24,12 +24,9 @@ final class DocumentPolicyTests: XCTestCase {
         XCTAssertEqual(try DocumentPolicy.movedOrder(count: 4, from: 3, to: 0), [3, 0, 1, 2])
         XCTAssertThrowsError(try DocumentPolicy.movedOrder(count: 4, from: 0, to: 4))
     }
-    func testUnsupportedContentEditingCannotSilentlyCreateAnOverlay() {
-        let editor = NativeContentEditor()
-        XCTAssertFalse(editor.capabilities.canReplaceExistingText)
-        XCTAssertFalse(editor.capabilities.canPermanentlyRedact)
-        XCTAssertThrowsError(try editor.replaceExistingText(onPage: 0, range: NSRange(location: 0, length: 1), with: "x")) {
-            XCTAssertEqual($0 as? PDFEditorError, .unsupportedContentEditing)
-        }
+    func testMalformedPDFCannotEnableSourceEditing() {
+        XCTAssertTrue(ContentCapabilities().canReplaceExistingText)
+        XCTAssertFalse(ContentCapabilities().canPermanentlyRedact)
+        XCTAssertThrowsError(try NativeContentEditor(data: Data("invalid".utf8)))
     }
 }

@@ -4,7 +4,11 @@
 
 Own transactional command layer over PDFKit; annotation and text-widget persistence; bounded undo/redo; page operations; original-preserving import; autosave/export; initial source-stream inspection; current-page OCR. App and tests have no commercial SDK dependency.
 
-## Milestone 2 — writable source object model
+## Implemented source-text subset
+
+A classic-xref object reader/writer, bounded Flate decoder, font ToUnicode/WinAnsi decoder and page text-operator selection now support horizontal single-line replacement/deletion. The app embeds replacement glyphs through CoreText, imports and renames resources, removes old operands, isolates shared page streams and rewrites reachable objects. UI selection, Unicode replacement, repeated editing and Undo/Redo are connected. Unsupported structures/text states fail explicitly. This does not implement secure redaction.
+
+## Milestone 2 — broader writable source object model
 
 - Parse PDF objects, references, resource dictionaries, compressed/object streams and cross-reference tables/streams.
 - Resolve inherited page resources and nested Form XObjects; preserve graphics state, matrices, clipping and reused resources.

@@ -3,6 +3,7 @@ import Foundation
 public enum PDFEditorError: Error, LocalizedError, Equatable {
     case invalidDocument, lockedDocument, permissionDenied, invalidPage
     case lastPage, emptySelection, exportFailed, invalidName, unsupportedContentEditing
+    case sourceStructureUnsupported, sourceTextUnsupported, staleSourceSelection, sourceTextOverflow
 
     public var errorDescription: String? {
         NSLocalizedString("error.\(self)", bundle: .module, comment: "PDF editor error")

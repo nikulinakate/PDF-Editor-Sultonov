@@ -160,6 +160,48 @@ final class PDFEngineTests: XCTestCase {
         XCTAssertEqual(try protected.serialized(), data)
     }
 
+    func testSourceReplacementRemovesOriginalAndSurvivesUndoRedoSave() throws {
+        let session = try makeSession()
+        let original = try XCTUnwrap(session.document.page(at: 0)?.string)
+        let block = try XCTUnwrap(session.sourceTextBlocks(onPage: 0).first)
+        XCTAssertTrue(block.text.contains("First page"), block.text)
+        try session.addText("Keep annotation", pageIndex: 0, bounds: CGRect(x: 30, y: 300, width: 180, height: 40), color: .blue)
+        XCTAssertThrowsError(try session.replaceSourceText(block, with: "stale", fontSize: 20, color: .black))
+        let fresh = try XCTUnwrap(session.sourceTextBlocks(onPage: 0).first)
+        let otherBefore = session.document.page(at: 1)?.string
+        try session.replaceSourceText(fresh, with: "Новый текст PDF", fontSize: 20, color: .blue)
+        let edited = try XCTUnwrap(session.document.page(at: 0)?.string)
+        XCTAssertFalse(edited.contains("First page"), edited)
+        XCTAssertFalse(edited.contains("Первый"), edited)
+        XCTAssertTrue(edited.contains("Новый текст PDF"), edited)
+        XCTAssertEqual(session.document.page(at: 1)?.string, otherBefore)
+        XCTAssertTrue(session.document.page(at: 0)?.annotations.contains { $0.contents == "Keep annotation" } == true)
+        try session.undo()
+        XCTAssertTrue(session.document.page(at: 0)?.string?.contains(original.trimmingCharacters(in: .whitespacesAndNewlines)) == true)
+        try session.redo(); try session.save()
+        let reopened = try XCTUnwrap(PDFDocument(url: session.sourceURL))
+        XCTAssertTrue(reopened.page(at: 0)?.string?.contains("Новый текст PDF") == true)
+        XCTAssertFalse(reopened.page(at: 0)?.string?.contains("First page") == true)
+        let again = try XCTUnwrap(session.sourceTextBlocks(onPage: 0).first)
+        try session.replaceSourceText(again, with: "Again", fontSize: 18, color: .black)
+        XCTAssertTrue(session.document.page(at: 0)?.string?.contains("Again") == true)
+        XCTAssertFalse(session.document.page(at: 0)?.string?.contains("Новый текст") == true)
+    }
+
+    func testSourceOverflowAndMultilineLeaveDocumentUnchanged() throws {
+        let session = try makeSession()
+        let block = try XCTUnwrap(session.sourceTextBlocks(onPage: 0).first)
+        let before = session.document.page(at: 0)?.string
+        XCTAssertThrowsError(try session.replaceSourceText(block, with: String(repeating: "W", count: 150), fontSize: 50, color: .black))
+        XCTAssertThrowsError(try session.replaceSourceText(block, with: "First\nSecond", fontSize: 20, color: .black))
+        XCTAssertEqual(session.document.page(at: 0)?.string, before)
+        XCTAssertFalse(session.canUndo)
+        try session.replaceSourceText(block, with: "", fontSize: 20, color: .black)
+        XCTAssertFalse(session.document.page(at: 0)?.string?.contains("First page") == true)
+        try session.undo()
+        XCTAssertEqual(session.document.page(at: 0)?.string, before)
+    }
+
     private func makeSession() throws -> PDFEditingSession {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

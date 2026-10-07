@@ -4,10 +4,11 @@ import PDFEditorCore
 import UniformTypeIdentifiers
 
 enum EditorTool: String, CaseIterable {
-    case browse, text, ink, signature, shape, eraser
+    case browse, editSource, text, ink, signature, shape, eraser
     var icon: String {
         switch self {
         case .browse: return "hand.draw"
+        case .editSource: return "character.cursor.ibeam"
         case .text: return "textformat"
         case .ink: return "pencil.tip"
         case .signature: return "signature"
@@ -38,6 +39,7 @@ struct EditorView: View {
     @State private var tool = EditorTool.browse
     @State private var pageIndex = 0
     @State private var color = Color(red: 0.12, green: 0.20, blue: 0.65)
+    @State private var sourceBlock: SourceTextBlock?
     @State private var textPlacement: TextPlacement?
     @State private var formPlacement: FormPlacement?
     @State private var signaturePlacement: TextPlacement?
@@ -75,6 +77,7 @@ struct EditorView: View {
             }
             .sheet(isPresented: $searching) { SearchView(session: session) { selection in controller.select(selection); searching = false } }
             .sheet(isPresented: $inspecting) { TextInspectorView(session: session, pageIndex: pageIndex) }
+            .sheet(item: $sourceBlock) { block in SourceTextSheet(session: session, block: block) }
             .sheet(item: $textPlacement) { placement in
                 TextAnnotationSheet(placement: placement, color: color) { text, size, selectedColor, bounds in
                     perform {
@@ -155,7 +158,7 @@ struct EditorView: View {
             HStack {
                 Text("\(pageIndex + 1) / \(session.document.pageCount)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 Spacer()
-                if tool != .browse && tool != .eraser { ColorPicker(L("color"), selection: $color, supportsOpacity: false).labelsHidden() }
+                if tool != .browse && tool != .eraser && tool != .editSource { ColorPicker(L("color"), selection: $color, supportsOpacity: false).labelsHidden() }
                 Text(L("tool.hint.\(tool.rawValue)")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 Spacer()
                 Button { pages = true } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel(L("organize"))
@@ -167,7 +170,7 @@ struct EditorView: View {
                             VStack(spacing: 5) { Image(systemName: item.icon).font(.title3); Text(L("tool.\(item.rawValue)")).font(.caption2) }
                                 .frame(minWidth: 62, minHeight: 54)
                                 .background(tool == item ? Theme.accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 12))
-                        }.disabled(item != .browse && !session.canAnnotate)
+                        }.disabled(item == .editSource ? !session.canEditSourceText : item != .browse && !session.canAnnotate)
                     }
                     Menu {
                         Button(L("highlight")) { mark(.highlight) }
@@ -190,6 +193,15 @@ struct EditorView: View {
         let bounds = CGRect(x: max(crop.minX, min(point.x, crop.maxX - width)),
                             y: max(crop.minY, min(point.y - height, crop.maxY - height)), width: width, height: height)
         switch tool {
+        case .editSource:
+            perform {
+                let blocks = try session.sourceTextBlocks(onPage: index)
+                let candidates = try blocks.filter { try session.sourceTextBounds($0).contains(point) }
+                guard let block = candidates.min(by: { abs($0.baselineY - point.y) < abs($1.baselineY - point.y) }) else {
+                    throw PDFEditorError.sourceTextUnsupported
+                }
+                sourceBlock = block
+            }
         case .text:
             textPlacement = TextPlacement(pageIndex: index, bounds: bounds)
         case .signature:
