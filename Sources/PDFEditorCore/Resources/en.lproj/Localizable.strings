@@ -1,0 +1,9 @@
+"error.invalidDocument" = "This file is not a readable PDF.";
+"error.lockedDocument" = "Enter the document password first.";
+"error.permissionDenied" = "This document does not allow this operation.";
+"error.invalidPage" = "Choose valid page numbers.";
+"error.lastPage" = "A document must contain at least one page.";
+"error.emptySelection" = "Select at least one page.";
+"error.exportFailed" = "The PDF could not be saved. Your previous file is unchanged.";
+"error.invalidName" = "Enter a valid document name without /, \\, or :.";
+"error.unsupportedContentEditing" = "Editing existing PDF text is not available in this version.";

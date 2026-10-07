@@ -1,0 +1,9 @@
+"error.invalidDocument" = "Не удалось открыть файл как PDF.";
+"error.lockedDocument" = "Сначала введите пароль документа.";
+"error.permissionDenied" = "Документ не разрешает эту операцию.";
+"error.invalidPage" = "Укажите корректные номера страниц.";
+"error.lastPage" = "В документе должна остаться хотя бы одна страница.";
+"error.emptySelection" = "Выберите хотя бы одну страницу.";
+"error.exportFailed" = "Не удалось сохранить PDF. Предыдущий файл не изменён.";
+"error.invalidName" = "Введите имя документа без /, \\ и :.";
+"error.unsupportedContentEditing" = "Изменение исходного текста PDF пока недоступно.";
