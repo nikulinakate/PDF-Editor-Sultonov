@@ -35,7 +35,7 @@
 "help.availableHint" = "Text annotations, drawing, handwritten signatures, rectangles, text markup, text form fields, page tools, camera scanning, and on-device OCR with TXT export.";
 "help.import" = "Import a PDF, scan paper, or select photos.";
 "help.limits" = "Current version";
-"help.limitsHint" = "Replacing original text or images, permanent redaction, searchable OCR PDFs and certificate-based signatures are planned. Password-protected documents are read-only. Only text form fields can be filled in this version.";
+"help.limitsHint" = "Original text editing supports horizontal single lines in compatible PDFs. Complex layout, original image replacement, redaction, searchable OCR PDFs and certificate signatures are planned. Protected documents remain read-only; only text form fields can be filled.";
 "help.pages" = "Use Pages to reorder, rotate, merge, duplicate or extract.";
 "help.privacy" = "Your documents stay on your device";
 "help.privacyHint" = "The app does not upload documents or OCR content to a server. Sharing sends only the file you choose through the system share sheet.";
@@ -47,7 +47,7 @@
 "highlight" = "Highlight";
 "import" = "Import PDF";
 "inspect.commands" = "Source text drawing commands:";
-"inspect.hint" = "Inspect and copy text from this page. Editing the original text is a future engine stage.";
+"inspect.hint" = "View and copy page text here. To change a supported original line, choose Edit text on the editor toolbar and tap that line.";
 "inspect.noText" = "No selectable text on this page. Try text recognition.";
 "inspect.text" = "Page text";
 "library.all" = "All";
