@@ -145,7 +145,10 @@ final class PDFEngineTests: XCTestCase {
 
     func testEncryptedDocumentRemainsReadOnlyAndEncrypted() throws {
         let session = try makeSession()
-        let data = try XCTUnwrap(session.document.dataRepresentation(options: [.userPasswordOption: "secret", .ownerPasswordOption: "owner"]))
+        let data = try XCTUnwrap(session.document.dataRepresentation(options: [
+            PDFDocumentWriteOption.userPasswordOption: "secret",
+            PDFDocumentWriteOption.ownerPasswordOption: "owner"
+        ]))
         let url = session.sourceURL.deletingLastPathComponent().appendingPathComponent("Protected.pdf")
         try data.write(to: url)
         let protected = try PDFEditingSession(url: url)
