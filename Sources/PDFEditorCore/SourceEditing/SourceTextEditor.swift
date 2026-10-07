@@ -170,7 +170,10 @@ public final class NativeContentEditor {
             let entries = try donor.dictionary(values)
             var target = try resources[category].map { try document.dictionary($0) } ?? [:]
             for (name, value) in entries {
-                let newName = "PE\(document.nextObject)_\(rename.count)"
+                guard rename[name] == nil else { throw PDFEditorError.sourceStructureUnsupported }
+                var suffix = rename.count
+                var newName = "PE\(document.nextObject)_\(suffix)"
+                while target[newName] != nil { suffix += 1; newName = "PE\(document.nextObject)_\(suffix)" }
                 rename[name] = newName; target[newName] = try copy(value)
             }
             resources[category] = .dictionary(target)

@@ -80,6 +80,19 @@ final class SourceTextTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(Data([4])))
     }
 
+    func testWriterPreservesFractionPrecisionWithoutExponentNotation() throws {
+        for value in [0.00000000012345, -0.000000002, 1.234567890123456, 1e20] {
+            let encoded = pdfNumber(value)
+            XCTAssertFalse(encoded.lowercased().contains("e"))
+            XCTAssertEqual(Double(encoded), value)
+        }
+    }
+
+    func testOversizedXrefCountFailsWithoutIntegerOverflow() {
+        let data = Data("%PDF-1.7\nxref\n9223372036854775807 2\ntrailer\n<< /Root 1 0 R >>\nstartxref\n9\n%%EOF\n".utf8)
+        XCTAssertThrowsError(try NativeContentEditor(data: data))
+    }
+
     private func fixture(_ text: String, shared: Bool = false) -> Data {
         let stream = "0 0 10 10 re f\n" + text
         var objects = [

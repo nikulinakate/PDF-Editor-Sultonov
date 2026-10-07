@@ -22,13 +22,13 @@ final class PDFObjectDocument {
             let token = try lexer.word()
             if token == "trailer" { break }
             guard let first = Int(token), let count = Int(try lexer.word()), first >= 0, count >= 0,
-                  first + count <= 200_000, offsets.count + count <= 100_000 else { throw PDFEditorError.sourceStructureUnsupported }
+                  first <= 200_000, count <= 200_000 - first, offsets.count + count <= 100_000 else { throw PDFEditorError.sourceStructureUnsupported }
             for number in first..<(first + count) {
                 guard let position = Int(try lexer.word()), let generation = Int(try lexer.word()),
                       (0...65535).contains(generation) else { throw PDFEditorError.invalidDocument }
                 let state = try lexer.word()
                 if state == "n" {
-                    guard position > 0, position < data.count else { throw PDFEditorError.invalidDocument }
+                    guard number > 0, position > 0, position < data.count else { throw PDFEditorError.invalidDocument }
                     let ref = PDFReference(object: number, generation: generation)
                     guard offsets[ref] == nil else { throw PDFEditorError.invalidDocument }
                     offsets[ref] = position

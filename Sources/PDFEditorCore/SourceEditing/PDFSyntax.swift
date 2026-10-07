@@ -142,9 +142,22 @@ struct PDFLexer {
 
 func pdfNumber(_ value: Double) -> String {
     if value.rounded() == value, abs(value) < 1e15 { return String(Int64(value)) }
-    return String(format: "%.8f", locale: Locale(identifier: "en_US_POSIX"), value)
-        .replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
-        .replacingOccurrences(of: "\\.$", with: "", options: .regularExpression)
+    let decimal = String(format: "%.17g", locale: Locale(identifier: "en_US_POSIX"), value)
+    let parts = decimal.lowercased().split(separator: "e")
+    guard parts.count == 2, let exponent = Int(parts[1]) else { return decimal }
+    let negative = parts[0].hasPrefix("-")
+    let mantissa = negative ? String(parts[0].dropFirst()) : String(parts[0])
+    let integerCount = mantissa.split(separator: ".")[0].count
+    let digits = mantissa.replacingOccurrences(of: ".", with: "")
+    let position = integerCount + exponent
+    let expanded: String
+    if position <= 0 { expanded = "0." + String(repeating: "0", count: -position) + digits }
+    else if position >= digits.count { expanded = digits + String(repeating: "0", count: position - digits.count) }
+    else {
+        let index = digits.index(digits.startIndex, offsetBy: position)
+        expanded = String(digits[..<index]) + "." + String(digits[index...])
+    }
+    return (negative ? "-" : "") + expanded
 }
 
 func pdfEncoded(_ value: PDFValue) throws -> Data {
