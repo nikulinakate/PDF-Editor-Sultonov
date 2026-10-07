@@ -43,7 +43,9 @@ extension PDFEditingSession {
         }
         // Reject overlap with another editable source object; no silent reflow.
         for other in try sourceTextBlocks(onPage: block.pageIndex) where other.id != block.id {
-            if !text.isEmpty && glyphBounds.intersects(try sourceTextBounds(other)) { throw PDFEditorError.sourceTextOverflow }
+            if !text.isEmpty {
+                if glyphBounds.intersects(try sourceTextBounds(other)) { throw PDFEditorError.sourceTextOverflow }
+            }
         }
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 1_000, height: 1_000))
         let donor = renderer.pdfData { context in

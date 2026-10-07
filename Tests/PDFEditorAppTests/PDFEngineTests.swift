@@ -202,6 +202,43 @@ final class PDFEngineTests: XCTestCase {
         XCTAssertEqual(session.document.page(at: 0)?.string, before)
     }
 
+    func testSourceRewritePreservesImageFormAndPixelsOutsideText() throws {
+        let session = try makeSession()
+        let widget = PDFAnnotation(bounds: CGRect(x: 200, y: 200, width: 180, height: 32), forType: .widget, withProperties: nil)
+        widget.widgetFieldType = .text; widget.fieldName = "Unchanged"; widget.widgetStringValue = "Keep field"
+        session.document.page(at: 0)?.addAnnotation(widget)
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
+            UIColor.red.setFill(); context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+            UIColor.blue.setFill(); context.fill(CGRect(x: 16, y: 16, width: 32, height: 32))
+        }
+        // A separate photo page exercises stream/resource preservation through the full writer.
+        try session.appendImages([image])
+        let before = try renderedPixels(session.page(at: 0))
+        let imageBefore = try renderedPixels(session.page(at: 2))
+        let block = try XCTUnwrap(session.sourceTextBlocks(onPage: 0).first)
+        try session.replaceSourceText(block, with: "Visible replacement", fontSize: 20, color: .black)
+        let after = try renderedPixels(session.page(at: 0))
+        XCTAssertNotEqual(before, after, "Replacement must affect rendered pixels")
+        // Bitmap rows below the header are unaffected, including the field appearance.
+        XCTAssertEqual(before.subdata(in: 200 * 595 * 4..<600 * 595 * 4), after.subdata(in: 200 * 595 * 4..<600 * 595 * 4))
+        XCTAssertEqual(try renderedPixels(session.page(at: 2)), imageBefore)
+        let reopened = try XCTUnwrap(PDFDocument(data: session.serialized()))
+        XCTAssertEqual(reopened.page(at: 0)?.annotations.first(where: { $0.fieldName == "Unchanged" })?.widgetStringValue, "Keep field")
+    }
+
+    private func renderedPixels(_ page: PDFPage) throws -> Data {
+        let width = 595, height = 842
+        var pixels = Data(count: width * height * 4)
+        try pixels.withUnsafeMutableBytes { buffer in
+            let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.setFillColor(UIColor.white.cgColor); context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            page.draw(with: .mediaBox, to: context)
+        }
+        return pixels
+    }
+
     private func makeSession() throws -> PDFEditingSession {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
